@@ -5,16 +5,46 @@
         <h1>Детали задачи</h1>
 
         <div class="app-info mt-5">
-            <h2>Последняя добавленная задача</h2>
+            <h2>Задача {{ $task['id'] }}</h2>
             <x-task
-                title="{{ $task['title'] }}"
-                description="{{ $task['description'] }}"
-                createdAt="{{ $task['created_at'] }}"
-                updatedAt="{{ $task['updated_at'] }}"
-                status="{{ $task['status'] ? 'Выполнена' : 'Не выполнена' }}"
-                priority="{{ $task['priority'] }}"
-                assignee="{{ $task['assignee'] }}"
+                :id="$task['id']"
+                :title="$task['title']"
+                :description="$task['description']"
+                :createdAt="$task['created_at']"
+                :category="$task->category"
+                :tags="$tags"
+                :updatedAt="$task['updated_at']"
+                :status="$task['status'] ? 'Выполнена' : 'Не выполнена'"
+                :priority="$task['priority']"
+                :assignee="$task['assignee']"
             />
+        </div>
+
+        <div class="app-info mt-5">
+            <form method="post" action="{{ route('tasks.comments.store', $task) }}">
+                @csrf
+                <div class="form-group">
+                    <label for="content">Комментарий</label>
+                    <textarea class="form-control" id="content" name="content" rows="3"></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary mt-3">Отправить</button>
+            </form>
+        </div>
+
+        <div class="app-info mt-5">
+            <h2>Комментарии</h2>
+            @if ($task->comments->isNotEmpty())
+                @foreach ($task->comments as $comment)
+                    <x-comment
+                        :task="$task"
+                        :comment="$comment"
+                        :createdAt="$comment['created_at']"
+                        :updatedAt="$comment['updated_at']"
+                    />
+                @endforeach
+            @else
+                <p>Комментариев нет</p>
+            @endif
         </div>
 
         <a href="{{ route('tasks.index') }}" class="btn btn-back">Назад к списку задач</a>

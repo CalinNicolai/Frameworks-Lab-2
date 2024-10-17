@@ -32,13 +32,16 @@
         <div class="app-info mt-5">
             <h2>Последняя добавленная задача</h2>
             <x-task
-                title="{{ $latestTask['title'] }}"
-                description="{{ $latestTask['description'] }}"
-                createdAt="{{ $latestTask['created_at'] }}"
-                updatedAt="{{ $latestTask['updated_at'] }}"
-                status="{{ $latestTask['status'] ? 'Выполнена' : 'Не выполнена' }}"
-                priority="{{ $latestTask['priority'] }}"
-                assignee="{{ $latestTask['assignee'] }}"
+                :id="$lastTask['id']"
+                :title="$lastTask['title']"
+                :description="$lastTask['description']"
+                :createdAt="$lastTask['created_at']"
+                :category="$lastTask->category"
+                :tags="$lastTask->tags"
+                :updatedAt="$lastTask['updated_at']"
+                :status="$lastTask['status'] ? 'Выполнена' : 'Не выполнена'"
+                :priority="$lastTask['priority']"
+                :assignee="$lastTask['assignee']"
             />
         </div>
     </div>
