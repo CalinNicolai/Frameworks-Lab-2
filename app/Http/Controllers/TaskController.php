@@ -2,9 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\CreateTaskRequest;
+use App\Http\Requests\UpdateTaskRequest;
 use App\Models\Category;
 use App\Models\Tag;
 use App\Models\Task;
+use GuzzleHttp\Promise\Create;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -35,16 +38,8 @@ class TaskController extends Controller
     /**
      * Store a newly created resource in storage.
      */
-    public function store(Request $request)
+    public function store(CreateTaskRequest $request)
     {
-        $request->validate([
-            'title' => 'required|string|max:255',
-            'description' => 'required|string',
-            'category_id' => 'required|exists:categories,id',
-            'tags' => 'required|array',
-            'tags.*' => 'exists:tags,id',
-        ]);
-
         $task = Task::create([
             'title' => $request->title,
             'description' => $request->description,
@@ -55,13 +50,14 @@ class TaskController extends Controller
             $task->tags()->attach($request->tags);
         }
 
+        session()->flash('success', 'Task created successfully');
         return redirect()->route('tasks.index');
     }
 
     /**
      * Display the specified resource.
      */
-    public function show($id)
+    public function show(int $id)
     {
         $task = Task::with('category', 'tags', 'comments')->findOrFail($id);
 
@@ -74,7 +70,7 @@ class TaskController extends Controller
     /**
      * Show the form for editing the specified resource.
      */
-    public function edit(string $id)
+    public function edit(int $id)
     {
         $task = Task::with('category', 'tags')->findOrFail($id);
 
@@ -88,16 +84,8 @@ class TaskController extends Controller
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request, string $id)
+    public function update(UpdateTaskRequest $request, int $id)
     {
-        $request->validate([
-            'title' => 'string|max:255',
-            'description' => 'string',
-            'category_id' => 'exists:categories,id',
-            'tags' => 'array',
-            'tags.*' => 'exists:tags,id',
-        ]);
-
         $task = Task::findOrFail($id);
 
         $task->update([
@@ -122,7 +110,7 @@ class TaskController extends Controller
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(string $id)
+    public function destroy(int $id)
     {
         $task = Task::findOrFail($id);
 

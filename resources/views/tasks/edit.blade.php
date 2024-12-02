@@ -11,11 +11,17 @@
             <div class="form-group">
                 <label for="title">Название задачи</label>
                 <input type="text" name="title" id="title" class="form-control" value="{{ old('title', $task->title) }}" required>
+                @error('title')
+                <div class="text-danger">{{ $message }}</div>
+                @enderror
             </div>
 
             <div class="form-group">
                 <label for="description">Описание задачи</label>
                 <textarea name="description" id="description" class="form-control" rows="4" required>{{ old('description', $task->description) }}</textarea>
+                @error('description')
+                <div class="text-danger">{{ $message }}</div>
+                @enderror
             </div>
 
             <div class="form-group">
@@ -28,6 +34,9 @@
                         </option>
                     @endforeach
                 </select>
+                @error('category')
+                <div class="text-danger">{{ $message }}</div>
+                @enderror
             </div>
 
             <div class="form-group">
@@ -40,6 +49,9 @@
                     @endforeach
                 </select>
                 <small class="form-text text-muted">Удерживайте Ctrl (или Command на Mac), чтобы выбрать несколько тегов.</small>
+                @error('tags')
+                <div class="text-danger">{{ $message }}</div>
+                @enderror
             </div>
 
             <button type="submit" class="btn btn-primary">Сохранить изменения</button>

@@ -1,21 +1,32 @@
-Отчёт по лабораторной работе №3: Основы работы с базами данных в Laravel
-------------------------------------------------------------------------
+# Отчёт по лабораторной работе №4: Работа с формами и валидацией в Laravel
+
+---
 
 ### Цель работы
 
-Целью данной лабораторной работы было знакомство с основными принципами работы с базами данных в Laravel, создание
-миграций, моделей и сидов, а также настройка связей между моделями в рамках веб-приложения To-Do App.
+Целью данной лабораторной работы было освоение работы с формами в Laravel, создание и обработка данных с использованием валидации, настройка безопасности форм, а также добавление функционала для редактирования задач в веб-приложении To-Do App.
+
+---
 
 ### Условие
 
-В этой лабораторной работе я продолжил разработку приложения To-Do App, добавив функциональность работы с базой данных,
-а также создал модели, миграции, фабрики и сиды для генерации тестовых данных.
+В рамках работы я реализовал следующие задачи:
+
+1. Создание формы для добавления новой задачи с использованием Blade-шаблонов.
+2. Реализация серверной валидации данных и отображение ошибок.
+3. Настройка маршрутов и методов контроллера для обработки форм.
+4. Создание и использование собственных классов запросов (Request).
+5. Добавление флеш-сообщений для подтверждения успешного выполнения операций.
+6. Обеспечение безопасности форм от CSRF-атак.
+7. Добавление функционала редактирования задач.
+
+---
 
 ### Выполнение работы
 
 #### №1. Подготовка к работе
 
-Для выполнения задания я выбрал СУБД MySQL. В файле `.env` настроил переменные окружения для подключения к базе данных:
+Я продолжил разработку приложения To-Do App. Убедился, что проект настроен, а подключение к базе данных указано в файле `.env`. Пример настроек:
 
 ```env
 DB_CONNECTION=mysql
@@ -26,234 +37,225 @@ DB_USERNAME=root
 DB_PASSWORD=пароль
 ```
 
-После этого я создал новую базу данных `todo_app` через MySQL.
+---
 
-#### №2. Создание моделей и миграций
+#### №2. Создание формы
 
-1. **Модель Category:** Я создал модель категории и миграцию для неё с помощью команды:
+1. **Создал форму для добавления новой задачи:**
 
-    ```bash
-    php artisan make:model Category -m
-    ````
+    - Форма содержит поля: Название, Описание, Дата выполнения, Категория.
+    - Поле "Категория" реализовано как выпадающий список, данные для которого загружаются из таблицы `categories`.
+
+   Пример формы в Blade-шаблоне (`resources/views/tasks/create.blade.php`):
+
+   ```html
+   <form action="{{ route('tasks.store') }}" method="POST">
+       @csrf
+       <div>
+           <label for="title">Название</label>
+           <input type="text" name="title" id="title" value="{{ old('title') }}" required>
+           @error('title')
+               <div>{{ $message }}</div>
+           @enderror
+       </div>
+       <div>
+           <label for="description">Описание</label>
+           <textarea name="description" id="description">{{ old('description') }}</textarea>
+           @error('description')
+               <div>{{ $message }}</div>
+           @enderror
+       </div>
+       <div>
+           <label for="due_date">Дата выполнения</label>
+           <input type="date" name="due_date" id="due_date" value="{{ old('due_date') }}" required>
+           @error('due_date')
+               <div>{{ $message }}</div>
+           @enderror
+       </div>
+       <div>
+           <label for="category_id">Категория</label>
+           <select name="category_id" id="category_id">
+               @foreach($categories as $category)
+                   <option value="{{ $category->id }}" {{ old('category_id') == $category->id ? 'selected' : '' }}>
+                       {{ $category->name }}
+                   </option>
+               @endforeach
+           </select>
+           @error('category_id')
+               <div>{{ $message }}</div>
+           @enderror
+       </div>
+       <button type="submit">Сохранить</button>
+   </form>
+   ```
+
+---
+
+#### №3. Валидация данных на стороне сервера
+
+1. **Реализовал валидацию данных в методе `store` контроллера `TaskController`:**
+
+   Пример правил валидации:
 
    ```php
-   Schema::create('categories', function (Blueprint $table) {
-   $table->id();
-   $table->string('name');
-   $table->text('description')->nullable();
-   $table->timestamps();
-   });
-   ```
+   public function store(Request $request)
+   {
+       $validated = $request->validate([
+           'title' => 'required|string|min:3',
+           'description' => 'nullable|string|max:500',
+           'due_date' => 'required|date|after_or_equal:today',
+           'category_id' => 'required|exists:categories,id',
+       ]);
 
-2. **Модель Task:** Создал модель задачи и миграцию:
+       Task::create($validated);
 
-   ```bash
-   php artisan make:model Task -m
-    ```
-   В миграции определил поля:
-
-   ```php
-   Schema::create('tasks', function (Blueprint $table) {
-   $table->id();
-   $table->string('title');
-   $table->text('description')->nullable();
-   $table->timestamps();
-   });
-   ```
-
-3. **Модель Tag:** Создал модель тегов и миграцию:
-
-   ```bash
-   php artisan make:model Tag -m
-   ```
-
-   В миграции для тегов:
-
-   ```php
-   Schema::create('tags', function (Blueprint $table) {
-   $table->id();
-   $table->string('name');
-   $table->timestamps();
-   });
-   ```
-
-После этого я запустил миграции:
-
-```bash
-php artisan migrate
-```
-1. В каждую модель (Category, Task, Tag) добавил поле `$fillable` для массового заполнения данных:
-
-   ```php
-    protected $fillable = ['name', 'description'];
-    ```
-#### №3. Связь между таблицами
-
-1. **Связь категорий и задач:** Создал миграцию для добавления поля `category_id` в таблицу `tasks`:
-
-   ```bash
-    php artisan make:migration add_category_id_to_tasks_table --table=tasks
-   ```
-
-   В миграции:
-
-   ```php
-   Schema::table('tasks', function (Blueprint $table) {
-   $table->foreignId('category_id')->constrained()->onDelete('cascade');
-   });
-   ```
-
-2. **Связь задач и тегов:** Для реализации связи многие ко многим создал промежуточную таблицу:
-
-   ```bash
-   php artisan make:migration create_task_tag_table
-   ```
-
-   В миграции определил структуру:
-
-   ```php
-   Schema::create('task_tag', function (Blueprint $table) {
-   $table->id();
-   $table->foreignId('task_id')->constrained()->onDelete('cascade');
-   $table->foreignId('tag_id')->constrained()->onDelete('cascade');
-   });
-   ```
-
-Запустил миграции для обновления структуры базы данных:
-
-```bash
-php artisan migrate
-```
-
-#### №4. Связи между моделями
-
-1. В модель **Category** добавил метод `tasks()` для связи один ко многим:
-
-   ```php
-   public function tasks() {
-   return $this->hasMany(Task::class);
+       return redirect()->route('tasks.index')->with('success', 'Задача успешно добавлена!');
    }
    ```
 
-2. В модель **Task** добавил методы:
+2. Обработал ошибки валидации в представлении. Ошибки выводятся рядом с соответствующими полями.
 
-    - Связь с категорией:
+---
+
+#### №4. Создание собственного класса запроса (Request)
+
+1. **Создал класс запроса `CreateTaskRequest`:**
+
+   ```bash
+   php artisan make:request CreateTaskRequest
+   ```
+
+2. **В классе `CreateTaskRequest` реализовал правила валидации:**
+
+   ```php
+   public function rules(): array
+   {
+       return [
+           'title' => 'required|string|min:3',
+           'description' => 'nullable|string|max:500',
+           'due_date' => 'required|date|after_or_equal:today',
+           'category_id' => 'required|exists:categories,id',
+       ];
+   }
+   ```
+
+3. Обновил метод `store` для использования `CreateTaskRequest`:
+
+   ```php
+   public function store(CreateTaskRequest $request)
+   {
+       Task::create($request->validated());
+       return redirect()->route('tasks.index')->with('success', 'Задача успешно добавлена!');
+   }
+   ```
+
+---
+
+#### №5. Добавление флеш-сообщений
+
+1. **Добавил флеш-сообщение в метод `store`:**
+
+   ```php
+   return redirect()->route('tasks.index')->with('success', 'Задача успешно добавлена!');
+   ```
+
+2. **Отобразил сообщение в представлении:**
+
+   ```blade
+   @if(session('success'))
+       <div class="alert alert-success">
+           {{ session('success') }}
+       </div>
+   @endif
+   ```
+
+---
+
+#### №6. Защита от CSRF
+
+1. Добавил директиву `@csrf` в форму для защиты от CSRF-атак.
+
+2. Убедился, что форма отправляет данные методом POST.
+
+---
+
+#### №7. Обновление задачи
+
+1. **Добавил возможность редактирования задачи:**
+
+    - Создал форму редактирования (`resources/views/tasks/edit.blade.php`).
+    - Создал маршрут `GET /tasks/{task}/edit` и метод `edit` в `TaskController`:
 
       ```php
-      public function category() {
-      return $this->belongsTo(Category::class);
+      public function edit(Task $task)
+      {
+          $categories = Category::all();
+          return view('tasks.edit', compact('task', 'categories'));
       }
       ```
 
-    - Связь с тегами:
+    - Создал маршрут `PUT /tasks/{task}` и метод `update`:
 
       ```php
-      public function tags() {
-      return $this->belongsToMany(Tag::class);
+      public function update(UpdateTaskRequest $request, Task $task)
+      {
+          $task->update($request->validated());
+          return redirect()->route('tasks.index')->with('success', 'Задача успешно обновлена!');
       }
       ```
 
-3. В модель **Tag** добавил связь многие ко многим с задачами:
+2. **Создал класс запроса `UpdateTaskRequest`:**
 
    ```php
-   public function tasks() {
-   return $this->belongsToMany(Task::class);
-   }
+   php artisan make:request UpdateTaskRequest
    ```
 
-#### №5. Создание фабрик и сидов
+   Правила валидации аналогичны правилам в `CreateTaskRequest`.
 
-1. **Фабрики:** Создал фабрики для генерации данных для моделей:
+---
+
+### Дополнительное задание
+
+1. **Создал кастомное правило валидации `NoRestrictedWords`:**
 
    ```bash
-   php artisan make:factory CategoryFactory --model=Category
-   php artisan make:factory TaskFactory --model=Task
-   php artisan make:factory TagFactory --model=Tag
+   php artisan make:rule NoRestrictedWords
    ```
 
-   Пример фабрики для категории:
+2. **Пример реализации правила:**
 
    ```php
-   public function definition() {
-   return [
-   'name' => $this->faker->word,
-   'description' => $this->faker->sentence,
-   ];
+   public function validate(string $attribute, mixed $value, Closure $fail): void
+   {
+       $restrictedWords = ['запретное', 'недопустимое'];
+       foreach ($restrictedWords as $word) {
+           if (stripos($value, $word) !== false) {
+               $fail("Поле :attribute содержит запрещенное слово: {$word}.");
+           }
+       }
    }
    ```
 
-2. **Сиды:** Создал сиды для заполнения таблиц начальными данными:
+3. Применил правило в `CreateTaskRequest` и `UpdateTaskRequest`.
 
-   ```bash
-   php artisan make:seeder CategorySeeder
-   php artisan make:seeder TaskSeeder
-   php artisan make:seeder TagSeeder
-   ```
-
-   В `DatabaseSeeder` добавил вызовы сидов:
-
-   ```php
-   $this->call([
-   CategorySeeder::class,
-   TaskSeeder::class,
-   TagSeeder::class,
-   ]);
-   ```
-
-Запустил сиды:
-
-```bash
-php artisan db:seed
-```
-#### №6. Работа с контроллерами и представлениями
-
-1. **Метод index** в `TaskController` для получения всех задач:
-
-   ```php
-   public function index() {
-   $tasks = Task::with(['category', 'tags'])->get();
-   return view('tasks.index', compact('tasks'));
-   }
-   ```
-
-2. **Метод show** для отображения отдельной задачи:
-
-   ```php
-   public function show($id) {
-   $task = Task::with(['category', 'tags'])->findOrFail($id);
-   return view('tasks.show', compact('task'));
-   }
-   ```
-
-3. Обновил методы `create`, `store`, `edit`, `update` и `destroy` для работы с задачами в базе данных.
-
-### Дополнительные задания
-
-Я создал модель **Comment**, добавил миграции и связи между моделями Task и Comment. В представлениях добавил
-возможность отображения комментариев к задачам, а также реализовал создание комментариев через контроллер.
+---
 
 ### Контрольные вопросы
 
-1. **Что такое миграции и для чего они используются?** Миграции --- это способ версионного контроля структуры базы
-   данных. Они позволяют создавать, изменять и удалять таблицы в БД через код, что упрощает управление базой данных при
-   разработке.
+1. **Что такое валидация данных и зачем она нужна?**  
+   Это процесс проверки данных на соответствие заданным критериям для защиты от некорректного ввода и предотвращения ошибок.
 
-2. **Что такое фабрики и сиды, и как они упрощают процесс разработки и тестирования?** Фабрики используются для
-   генерации тестовых данных, а сиды --- для заполнения базы данных начальными данными. Они упрощают создание большого
-   объёма данных для тестирования и демонстрации функциональности приложения.
+2. **Как обеспечить защиту формы от CSRF-атак в Laravel?**  
+   Использовать директиву `@csrf` в форме.
 
-3. **Что такое ORM? В чем различия между паттернами DataMapper и ActiveRecord?** ORM (Object-Relational Mapping) --- это
-   способ работы с базой данных через объекты. Паттерн ActiveRecord предполагает, что модель представляет собой одну
-   таблицу БД, а DataMapper отделяет логику работы с БД от самих объектов.
+3. **Как создать и использовать собственные классы запросов (Request) в Laravel?**  
+   Класс создается командой `php artisan make:request`. Используется в контроллере для обработки и валидации входящих данных.
 
-4. **В чем преимущества использования ORM по сравнению с прямыми SQL-запросами?** ORM позволяет писать более читаемый и
-   поддерживаемый код, облегчает управление связями между таблицами и автоматически защищает от SQL-инъекций.
+4. **Как защитить данные от XSS-атак при выводе в представлении?**  
+   Использовать функцию `{{ }}`, которая экранирует HTML-теги.
 
-5. **Что такое транзакции и зачем они нужны при работе с базами данных?** Транзакции --- это механизм, который позволяет
-   объединить несколько операций с базой данных в одну атомарную операцию. Если одна из операций не выполнится,
-   транзакция будет отменена, и все изменения откатятся, что защищает данные от неконсистентности.
+---
 
 ### Вывод
 
-В ходе данной лабораторной работы я освоил основные операции работы с базами данных в Laravel, такие как создание
-миграций, моделей, сидов, фабрик, а также настройка связей между таблицами и использование ORM.
+В ходе данной лабораторной работы я научился создавать формы, реализовывать валидацию данных, обрабатывать ошибки и защищать формы от атак. Реализация дополнительного задания с кастомным правилом валидации улучшила мои знания о работе с правилами в Laravel.
