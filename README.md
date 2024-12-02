@@ -1,24 +1,26 @@
-# Отчёт по лабораторной работе №4: Работа с формами и валидацией в Laravel
+# Отчёт по лабораторной работе №5: Компоненты безопасности в Laravel
 
 ---
 
 ### Цель работы
 
-Целью данной лабораторной работы было освоение работы с формами в Laravel, создание и обработка данных с использованием валидации, настройка безопасности форм, а также добавление функционала для редактирования задач в веб-приложении To-Do App.
+Целью данной лабораторной работы было освоение работы с компонентами безопасности Laravel, включая аутентификацию,
+авторизацию, защиту маршрутов, управление ролями и защиту от CSRF-атак. Дополнительно было реализовано логирование
+действий пользователя и настройка сброса пароля.
 
 ---
 
 ### Условие
 
-В рамках работы я реализовал следующие задачи:
+В рамках работы я выполнил следующие задачи:
 
-1. Создание формы для добавления новой задачи с использованием Blade-шаблонов.
-2. Реализация серверной валидации данных и отображение ошибок.
-3. Настройка маршрутов и методов контроллера для обработки форм.
-4. Создание и использование собственных классов запросов (Request).
-5. Добавление флеш-сообщений для подтверждения успешного выполнения операций.
-6. Обеспечение безопасности форм от CSRF-атак.
-7. Добавление функционала редактирования задач.
+1. Реализовал базовую аутентификацию пользователей, включая регистрацию, вход и выход.
+2. Настроил авторизацию для доступа к личным кабинетам пользователей.
+3. Создал систему ролей: Администратор и Пользователь.
+4. Настроил доступ к маршрутам и страницам в зависимости от роли пользователя.
+5. Обеспечил защиту форм от CSRF-атак.
+6. Добавил функционал сброса пароля.
+7. (Дополнительно) Настроил логирование действий пользователей.
 
 ---
 
@@ -26,236 +28,221 @@
 
 #### №1. Подготовка к работе
 
-Я продолжил разработку приложения To-Do App. Убедился, что проект настроен, а подключение к базе данных указано в файле `.env`. Пример настроек:
-
-```env
-DB_CONNECTION=mysql
-DB_HOST=127.0.0.1
-DB_PORT=3306
-DB_DATABASE=todo_app
-DB_USERNAME=root
-DB_PASSWORD=пароль
-```
+Продолжил выполнение лабораторной работы на предыдущих лабораторных работах.
 
 ---
 
-#### №2. Создание формы
+#### №2. Аутентификация пользователей
 
-1. **Создал форму для добавления новой задачи:**
+1. **Создал `AuthController`** для управления аутентификацией.
 
-    - Форма содержит поля: Название, Описание, Дата выполнения, Категория.
-    - Поле "Категория" реализовано как выпадающий список, данные для которого загружаются из таблицы `categories`.
+2. Реализовал методы:
 
-   Пример формы в Blade-шаблоне (`resources/views/tasks/create.blade.php`):
+    - `register()`: Отображает форму регистрации.
+    - `storeRegister()`: Обрабатывает регистрацию пользователя.
+    - `login()`: Отображает форму входа.
+    - `storeLogin()`: Обрабатывает вход пользователя.
+    - `logout()`: Выполняет выход пользователя.
 
-   ```html
-   <form action="{{ route('tasks.store') }}" method="POST">
+3. Пример метода регистрации:
+
+   ```php
+   public function storeRegister(Request $request)
+   {
+       $validated = $request->validate([
+           'name' => 'required|string|max:255',
+           'email' => 'required|string|email|max:255|unique:users',
+           'password' => 'required|string|min:8|confirmed',
+       ]);
+
+       $user = User::create([
+           'name' => $validated['name'],
+           'email' => $validated['email'],
+           'password' => bcrypt($validated['password']),
+       ]);
+
+       Auth::login($user);
+
+       return redirect()->route('dashboard')->with('success', 'Вы успешно зарегистрировались!');
+   }
+   ```
+
+4. **Настроил маршруты** для регистрации, входа и выхода:
+
+   ```php
+   Route::get('/register', [AuthController::class, 'register'])->name('register');
+   Route::post('/register', [AuthController::class, 'storeRegister']);
+   Route::get('/login', [AuthController::class, 'login'])->name('login');
+   Route::post('/login', [AuthController::class, 'storeLogin']);
+   Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
+   ```
+
+5. **Обновил представления** для форм регистрации и входа.
+
+6. Проверил корректность работы регистрации, входа и выхода.
+
+---
+
+#### №3. Аутентификация с использованием готовых компонентов
+
+1. Установил Laravel Breeze:
+
+   ```bash
+   composer require laravel/breeze --dev
+   php artisan breeze:install
+   npm install && npm run dev
+   php artisan migrate
+   ```
+
+2. Проверил маршруты `/register`, `/login`, `/logout`. Убедился, что они работают корректно.
+
+---
+
+#### №4. Авторизация пользователей
+
+1. **Реализовал личный кабинет** с маршрутом `/dashboard`, доступ к которому имеют только авторизованные пользователи.
+
+2. **Настроил middleware `auth`** для защиты маршрута:
+
+   ```php
+   Route::get('/dashboard', function () {
+       return view('dashboard');
+   })->middleware('auth')->name('dashboard');
+   ```
+
+3. Обновил представление личного кабинета для отображения имени пользователя:
+
+   ```blade
+   <h1>Добро пожаловать, {{ auth()->user()->name }}!</h1>
+   ```
+
+---
+
+#### №5. Роли пользователей
+
+1. **Добавил роли в таблицу `users`:**
+
+   ```bash
+   php artisan make:migration add_role_to_users_table --table=users
+   ```
+
+   В файле миграции:
+
+   ```php
+   Schema::table('users', function (Blueprint $table) {
+       $table->string('role')->default('user'); // Возможные значения: 'admin', 'user'
+   });
+   ```
+
+   Выполнил миграцию:
+
+   ```bash
+   php artisan migrate
+   ```
+
+2. **Настроил проверку ролей с помощью Gate:**
+
+   В файле `AuthServiceProvider` добавил:
+
+   ```php
+   use Illuminate\Support\Facades\Gate;
+
+   Gate::define('view-any-dashboard', function ($user) {
+       return $user->role === 'admin';
+   });
+   ```
+
+3. **Использовал проверки в контроллере:**
+
+   ```php
+   public function showDashboard()
+   {
+       if (Gate::allows('view-any-dashboard')) {
+           $users = User::all(); // Администратор видит всех пользователей
+           return view('admin.dashboard', compact('users'));
+       }
+
+       return view('user.dashboard'); // Пользователь видит только свой кабинет
+   }
+   ```
+
+4. Добавил middleware для проверки ролей.
+
+---
+
+#### №6. Выход и защита от CSRF
+
+1. **Добавил кнопку выхода:**
+
+   ```blade
+   <form action="{{ route('logout') }}" method="POST">
        @csrf
-       <div>
-           <label for="title">Название</label>
-           <input type="text" name="title" id="title" value="{{ old('title') }}" required>
-           @error('title')
-               <div>{{ $message }}</div>
-           @enderror
-       </div>
-       <div>
-           <label for="description">Описание</label>
-           <textarea name="description" id="description">{{ old('description') }}</textarea>
-           @error('description')
-               <div>{{ $message }}</div>
-           @enderror
-       </div>
-       <div>
-           <label for="due_date">Дата выполнения</label>
-           <input type="date" name="due_date" id="due_date" value="{{ old('due_date') }}" required>
-           @error('due_date')
-               <div>{{ $message }}</div>
-           @enderror
-       </div>
-       <div>
-           <label for="category_id">Категория</label>
-           <select name="category_id" id="category_id">
-               @foreach($categories as $category)
-                   <option value="{{ $category->id }}" {{ old('category_id') == $category->id ? 'selected' : '' }}>
-                       {{ $category->name }}
-                   </option>
-               @endforeach
-           </select>
-           @error('category_id')
-               <div>{{ $message }}</div>
-           @enderror
-       </div>
-       <button type="submit">Сохранить</button>
+       <button type="submit">Выйти</button>
    </form>
    ```
 
+2. Убедился, что все формы используют директиву `@csrf` для защиты от CSRF-атак.
+
 ---
 
-#### №3. Валидация данных на стороне сервера
+#### №7. Сброс пароля
 
-1. **Реализовал валидацию данных в методе `store` контроллера `TaskController`:**
+1. Настроил сброс пароля с использованием команды:
 
-   Пример правил валидации:
+   ```bash
+   php artisan make:auth
+   ```
+
+2. Убедился, что маршруты `/password/reset` работают корректно.
+
+---
+
+#### №8. Логирование действий (дополнительно)
+
+1. **Создал middleware для логирования действий пользователя:**
 
    ```php
-   public function store(Request $request)
+   php artisan make:middleware LogUserActivity
+   ```
+
+2. В middleware:
+
+   ```php
+   public function handle($request, Closure $next)
    {
-       $validated = $request->validate([
-           'title' => 'required|string|min:3',
-           'description' => 'nullable|string|max:500',
-           'due_date' => 'required|date|after_or_equal:today',
-           'category_id' => 'required|exists:categories,id',
+       \Log::info('Пользователь выполнил действие', [
+           'user_id' => auth()->id(),
+           'url' => $request->url(),
+           'method' => $request->method(),
+           'data' => $request->all(),
        ]);
 
-       Task::create($validated);
-
-       return redirect()->route('tasks.index')->with('success', 'Задача успешно добавлена!');
+       return $next($request);
    }
    ```
 
-2. Обработал ошибки валидации в представлении. Ошибки выводятся рядом с соответствующими полями.
-
----
-
-#### №4. Создание собственного класса запроса (Request)
-
-1. **Создал класс запроса `CreateTaskRequest`:**
-
-   ```bash
-   php artisan make:request CreateTaskRequest
-   ```
-
-2. **В классе `CreateTaskRequest` реализовал правила валидации:**
-
-   ```php
-   public function rules(): array
-   {
-       return [
-           'title' => 'required|string|min:3',
-           'description' => 'nullable|string|max:500',
-           'due_date' => 'required|date|after_or_equal:today',
-           'category_id' => 'required|exists:categories,id',
-       ];
-   }
-   ```
-
-3. Обновил метод `store` для использования `CreateTaskRequest`:
-
-   ```php
-   public function store(CreateTaskRequest $request)
-   {
-       Task::create($request->validated());
-       return redirect()->route('tasks.index')->with('success', 'Задача успешно добавлена!');
-   }
-   ```
-
----
-
-#### №5. Добавление флеш-сообщений
-
-1. **Добавил флеш-сообщение в метод `store`:**
-
-   ```php
-   return redirect()->route('tasks.index')->with('success', 'Задача успешно добавлена!');
-   ```
-
-2. **Отобразил сообщение в представлении:**
-
-   ```blade
-   @if(session('success'))
-       <div class="alert alert-success">
-           {{ session('success') }}
-       </div>
-   @endif
-   ```
-
----
-
-#### №6. Защита от CSRF
-
-1. Добавил директиву `@csrf` в форму для защиты от CSRF-атак.
-
-2. Убедился, что форма отправляет данные методом POST.
-
----
-
-#### №7. Обновление задачи
-
-1. **Добавил возможность редактирования задачи:**
-
-    - Создал форму редактирования (`resources/views/tasks/edit.blade.php`).
-    - Создал маршрут `GET /tasks/{task}/edit` и метод `edit` в `TaskController`:
-
-      ```php
-      public function edit(Task $task)
-      {
-          $categories = Category::all();
-          return view('tasks.edit', compact('task', 'categories'));
-      }
-      ```
-
-    - Создал маршрут `PUT /tasks/{task}` и метод `update`:
-
-      ```php
-      public function update(UpdateTaskRequest $request, Task $task)
-      {
-          $task->update($request->validated());
-          return redirect()->route('tasks.index')->with('success', 'Задача успешно обновлена!');
-      }
-      ```
-
-2. **Создал класс запроса `UpdateTaskRequest`:**
-
-   ```php
-   php artisan make:request UpdateTaskRequest
-   ```
-
-   Правила валидации аналогичны правилам в `CreateTaskRequest`.
-
----
-
-### Дополнительное задание
-
-1. **Создал кастомное правило валидации `NoRestrictedWords`:**
-
-   ```bash
-   php artisan make:rule NoRestrictedWords
-   ```
-
-2. **Пример реализации правила:**
-
-   ```php
-   public function validate(string $attribute, mixed $value, Closure $fail): void
-   {
-       $restrictedWords = ['запретное', 'недопустимое'];
-       foreach ($restrictedWords as $word) {
-           if (stripos($value, $word) !== false) {
-               $fail("Поле :attribute содержит запрещенное слово: {$word}.");
-           }
-       }
-   }
-   ```
-
-3. Применил правило в `CreateTaskRequest` и `UpdateTaskRequest`.
+3. Зарегистрировал middleware в `Kernel.php` и применил к защищённым маршрутам.
 
 ---
 
 ### Контрольные вопросы
 
-1. **Что такое валидация данных и зачем она нужна?**  
-   Это процесс проверки данных на соответствие заданным критериям для защиты от некорректного ввода и предотвращения ошибок.
+1. **Какие готовые решения для аутентификации предоставляет Laravel?**  
+   Laravel Breeze, Fortify, Jetstream, Laravel Passport, Laravel Sanctum.
 
-2. **Как обеспечить защиту формы от CSRF-атак в Laravel?**  
-   Использовать директиву `@csrf` в форме.
+2. **Какие методы аутентификации пользователей вы знаете?**  
+   Email и пароль, OAuth2, токены API, социальные сети (Google, Facebook и др.).
 
-3. **Как создать и использовать собственные классы запросов (Request) в Laravel?**  
-   Класс создается командой `php artisan make:request`. Используется в контроллере для обработки и валидации входящих данных.
+3. **Чем отличается аутентификация от авторизации?**  
+   Аутентификация — это подтверждение личности пользователя, авторизация — это проверка прав доступа к ресурсам.
 
-4. **Как защитить данные от XSS-атак при выводе в представлении?**  
-   Использовать функцию `{{ }}`, которая экранирует HTML-теги.
+4. **Как обеспечить защиту от CSRF-атак в Laravel?**  
+   Использовать директиву `@csrf` в формах и встроенное middleware для проверки токенов CSRF.
 
 ---
 
 ### Вывод
 
-В ходе данной лабораторной работы я научился создавать формы, реализовывать валидацию данных, обрабатывать ошибки и защищать формы от атак. Реализация дополнительного задания с кастомным правилом валидации улучшила мои знания о работе с правилами в Laravel.
+В ходе данной лабораторной работы я освоил работу с основными компонентами безопасности Laravel. Я реализовал
+аутентификацию и авторизацию, защитил формы от CSRF-атак, настроил роли пользователей и маршруты в зависимости от ролей.
+Дополнительно я добавил логирование действий пользователей, что расширило мои знания о разработке безопасных приложений.
